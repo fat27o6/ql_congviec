@@ -5,25 +5,25 @@ export default function CommentDrawer({ taskId, open, onClose }){
   const [comments, setComments] = useState([])
   const [text, setText] = useState('')
   const load = async ()=>{
-    const { data } = await api.get(`/comments/task/${taskId}`)
+    const { data } = await api.get(`/tasks/${taskId}/comments`)
     setComments(Array.isArray(data) ? data : [])
   }
   useEffect(()=>{ if(open) load() },[open, taskId])
 
   const add = async ()=>{
     if(!text.trim()) return
-    await api.post('/comments', { taskId, text })
+    await api.post(`/tasks/${taskId}/comments`, { taskId, text })
     setText('')
     load()
   }
   const del = async (id)=>{
-    await api.delete(`/comments/${id}`)
+    await api.delete(`/tasks/${taskId}/comments/${id}`)
     load()
   }
 
   if(!open) return null
   return (
-    <div className="fixed inset-0 bg-black/40 flex justify-end">
+    <div className="fixed inset-0 bg-black/40 flex justify-end mt-12 p-4">
       <div className="bg-white w-full max-w-md p-4 overflow-y-auto">
         <div className="flex justify-between items-center mb-2">
           <h2 className="font-semibold">Comments</h2>

@@ -6,7 +6,7 @@ const router = express.Router();
 router.post("/", SectionController.createSection);
 router.get("/", SectionController.getSections);
 router.get("/:id", SectionController.getSectionById);
-router.get("/project/:projectId", SectionController.getSectionsByProjectId);
+router.get("/projects/:projectId", SectionController.getSectionsByProjectId);
 router.patch("/:id", SectionController.updateSection);
 router.delete("/:id", SectionController.deleteSection);
 

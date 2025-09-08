@@ -1,13 +1,31 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TaskCard from './TaskCard'
 import { api } from '../api'
 
-export default function Section({ title, sectionId, tasks = [], onUpdated, projectId }) {
+export default function Section({ title, sectionId, onUpdated, projectId }) {
   const [editing, setEditing] = useState(false)
+  const [tasks, setTasks] = useState([])
   const [name, setName] = useState(title)
+
+  const loadtask = async () =>{
+    try {
+      if (sectionId == null){
+        const tasks = await api.get(`/tasks/projects/${projectId}/tasks`)
+        setTasks(Array.isArray(tasks.data) ? tasks.data : [])
+      }
+      else{
+        const tasks = await api.get(`/tasks/sections/${sectionId}`)
+        setTasks(Array.isArray(tasks.data) ? tasks.data : [])
+      }
+    } catch (err) {
+      console.error('Failed to load project detail:', err)
+      setTasks([])
+    }
+  }
 
   const save = async () => {
     try {
+      if (!sectionId) return
       await api.patch(`/sections/${sectionId}`, { name })
       setEditing(false)
       onUpdated?.()
@@ -18,9 +36,9 @@ export default function Section({ title, sectionId, tasks = [], onUpdated, proje
   }
 
   const del = async () => {
+    if (!sectionId) return
     if (!confirm('Delete section?')) return
     try {
-      console.log("sections ID", sectionId)
       await api.delete(`/sections/${sectionId}`)
       onUpdated?.()
     } catch (e) {
@@ -28,6 +46,9 @@ export default function Section({ title, sectionId, tasks = [], onUpdated, proje
       alert(e?.response?.data?.error || 'Delete section failed')
     }
   }
+
+  useEffect(() => { loadtask() }, [])
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -56,7 +77,9 @@ export default function Section({ title, sectionId, tasks = [], onUpdated, proje
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {Array.isArray(tasks) && tasks.length > 0 ? (
-          tasks.map(t => <TaskCard key={t._id} task={t} onUpdated={onUpdated} />)
+          tasks.map(t => (
+            <TaskCard key={t._id} task={t} onUpdated={onUpdated} onStatusChange={loadtask} />
+          ))
         ) : (
           <div className="text-sm text-gray-500 italic">No tasks</div>
         )}
@@ -67,7 +90,7 @@ export default function Section({ title, sectionId, tasks = [], onUpdated, proje
           onClick={() =>
             document.dispatchEvent(
               new CustomEvent('open-task-modal', {
-                detail: { projectId, sectionId: sectionId || null }
+                detail: { projectId, sectionId } // giữ ObjectId
               })
             )
           }

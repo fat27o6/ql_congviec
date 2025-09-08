@@ -48,33 +48,41 @@ export default class taskDAO {
     static async getTasksByProject(projectId) {
         try {
             const cursor = await tasks.find(
-                { projectId: new ObjectId(projectId) }
+                {   projectId: new ObjectId(projectId),
+                    sectionId: null
+                }
             ).sort({ createdAt: 1 })
             
-            const tasksList = await cursor.toArray()
-            
-            // Format response to match API spec: id, title, completed
-            return tasksList.map(task => ({
-                id: task._id,
-                title: task.title,
-                completed: task.completed
-            }))
+            return await cursor.toArray()
         } catch (e) {
             console.error(`Unable to get tasks by project: ${e}`)
             throw e
         }
     }
 
-    static async getTasksBySection(projectId, sectionId) {
+    static async getTasksBySection(sectionId) {
         try {
             const cursor = await tasks.find({
-                projectId: new ObjectId(projectId),
                 sectionId: new ObjectId(sectionId)
             }).sort({ createdAt: 1 })
             
             return await cursor.toArray()
         } catch (e) {
             console.error(`Unable to get tasks by section: ${e}`)
+            throw e
+        }
+    }
+
+    static async getTasksComplete(userId) {
+        try {
+            const cursor = await tasks.find({
+                userId: new ObjectId(userId),
+                completed: true
+            }).sort({ createdAt: 1 })
+            
+            return await cursor.toArray()
+        } catch (e) {
+            console.error(`Unable to get tasks completed: ${e}`)
             throw e
         }
     }
@@ -90,7 +98,6 @@ export default class taskDAO {
             if (updateData.dueAt !== undefined) updateFields.dueAt = updateData.dueAt ? new Date(updateData.dueAt) : null;
             if (updateData.priority !== undefined) updateFields.priority = updateData.priority;
             if (updateData.labels !== undefined) updateFields.labels = updateData.labels;
-            if (updateData.completed !== undefined) updateFields.completed = updateData.completed;
             
             const result = await tasks.updateOne(
                 { _id: new ObjectId(taskId) },
@@ -119,12 +126,41 @@ export default class taskDAO {
 
     static async getTaskById(taskId) {
         try {
-            return await tasks.findOne(
-                { _id: new ObjectId(taskId) }
-            )
+            const pipeline = [
+            { $match: { _id: new ObjectId(taskId) } },
+            {
+                $lookup: {
+                from: "labels",           // tên collection labels
+                localField: "labels",     // field trong task
+                foreignField: "_id",      // so với label._id
+                as: "labelDetails"
+                }
+            },
+            {
+                $project: {
+                _id: 1,
+                title: 1,
+                description: 1,
+                startAt: 1,
+                dueAt: 1,
+                priority: 1,
+                completed: 1,
+                comments: 1,
+                projectId: 1,
+                sectionId: 1,
+                userId: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                labels: "$labelDetails"   // trả mảng object label { _id, name, ... }
+                }
+            }
+            ];
+
+            const results = await tasks.aggregate(pipeline).toArray();
+            return results[0];
         } catch (e) {
-            console.error(`Unable to get task by ID: ${e}`)
-            throw e
+            console.error(`Unable to get task by ID with labels: ${e}`);
+            throw e;
         }
     }
 
@@ -141,70 +177,151 @@ export default class taskDAO {
         }
     }
 
-    static async searchTasks(query, page = 1, limit = 10) {
+    static async searchTasks(query, userId) {
         try {
-            const skip = (page - 1) * limit;
-            
-            // Using text search (requires text index)
-            const cursor = tasks.find({
-                $text: { $search: query }
-            })
-            .skip(skip)
-            .limit(limit)
-            .sort({ score: { $meta: "textScore" } })
-            
-            const total = await tasks.countDocuments({
-                $text: { $search: query }
-            })
-            
-            const tasksList = await cursor.toArray()
-            
-            return {
-                tasks: tasksList,
-                total: total,
-                page: page,
-                limit: limit,
-                pages: Math.ceil(total / limit)
-            }
-        } catch (e) {
-            // Fallback to regex if text search fails
-            try {
-                const skip = (page - 1) * limit;
-                
-                const cursor = tasks.find({
-                    title: { $regex: query, $options: 'i' }
-                })
-                .skip(skip)
-                .limit(limit)
-                .sort({ title: 1 })
-                
-                const total = await tasks.countDocuments({
-                    title: { $regex: query, $options: 'i' }
-                })
-                
-                const tasksList = await cursor.toArray()
-                
-                return {
-                    tasks: tasksList,
-                    total: total,
-                    page: page,
-                    limit: limit,
-                    pages: Math.ceil(total / limit)
+            const pipeline = [
+            {
+                $match: {
+                userId: new ObjectId(userId),
+                title: { $regex: query, $options: "i" }
                 }
-            } catch (fallbackError) {
-                console.error(`Unable to search tasks: ${fallbackError}`)
-                throw fallbackError
+            },
+            {
+                $lookup: {
+                from: "labels",
+                localField: "labels",
+                foreignField: "_id",
+                as: "labelDetails"
+                }
+            },
+            {
+                $project: {
+                _id: 1,
+                title: 1,
+                dueAt: 1,
+                completed: 1,
+                priority: 1,
+                labels: "$labelDetails"
+                }
             }
+            ];
+            return await tasks.aggregate(pipeline).toArray();
+        } catch (e) {
+            console.error(`Unable to search tasks: ${e}`)
+            throw e
         }
     }
 
-    static async updateTaskStatus(taskId, completed) {
+    static async getTodayTasks(userId) {
+        const start = new Date(); start.setHours(0,0,0,0);
+        const end = new Date(); end.setHours(23,59,59,999);
+        const pipeline = [
+            {
+                $match: {
+                userId: new ObjectId(userId),
+                dueAt: { $gte: start, $lte: end },
+                completed: false
+                }
+            },
+            {
+                $lookup: {
+                from: "labels",
+                localField: "labels",
+                foreignField: "_id",
+                as: "labelDetails"
+                }
+            },
+            {
+                $project: {
+                _id: 1,
+                title: 1,
+                dueAt: 1,
+                completed: 1,
+                priority: 1,
+                labels: "$labelDetails"
+                }
+            }
+        ];
+        return await tasks.aggregate(pipeline).toArray();
+    }
+
+    static async getUpcomingTasks(userId) {
+        const today = new Date();
+        const upcoming = new Date();
+        upcoming.setDate(today.getDate() + 3);
+        const pipeline = [
+            {
+                $match: {
+                userId: new ObjectId(userId),
+                dueAt: { $gt: today, $lte: upcoming },
+                completed: false
+                }
+            },
+            {
+                $lookup: {
+                from: "labels",
+                localField: "labels",
+                foreignField: "_id",
+                as: "labelDetails"
+                }
+            },
+            {
+                $project: {
+                _id: 1,
+                title: 1,
+                dueAt: 1,
+                completed: 1,
+                priority: 1,
+                labels: "$labelDetails"
+                }
+            }
+        ];
+        return await tasks.aggregate(pipeline).toArray();
+    }
+
+    static async getCompletedTasks(userId) {
+        const pipeline = [
+            {
+                $match: {
+                userId: new ObjectId(userId),
+                completed: true
+                }
+            },
+            {
+                $lookup: {
+                from: "labels",
+                localField: "labels",
+                foreignField: "_id",
+                as: "labelDetails"
+                }
+            },
+            {
+                $project: {
+                _id: 1,
+                title: 1,
+                dueAt: 1,
+                completed: 1,
+                priority: 1,
+                labels: "$labelDetails"
+                }
+            }
+        ];
+        return await tasks.aggregate(pipeline).toArray();
+    }
+
+    static async updateTaskStatus(taskId) {
         try {
+            const task = await tasks.findOne({ _id: new ObjectId(taskId) })
+            if (!task) {
+                throw new Error("Task not found")
+            }
+            
+            // Update task status to completed
             const result = await tasks.updateOne(
                 { _id: new ObjectId(taskId) },
                 { 
-                    $set: { 
-                        completed: completed,
+                    $set: {
+                        completed: !task.completed,
                         updatedAt: new Date()
                     } 
                 }
@@ -213,6 +330,43 @@ export default class taskDAO {
             return result.modifiedCount > 0
         } catch (e) {
             console.error(`Unable to update task status: ${e}`)
+            throw e
+        }
+    }
+
+    static async addComment(taskId, comment) {
+        try {
+            const newComment = {
+                _id: new ObjectId(),
+                text: comment,
+                createdAt: new Date(),
+            };
+            const result = await tasks.updateOne(
+                { _id: new ObjectId(taskId) },
+                { $push: {
+                        comments: newComment
+                    }
+                }
+            )
+            return result;
+        } catch (e) {
+            console.error(`Unable to add label to task: ${e}`)
+            throw e
+        }
+    }
+
+    static async deleteComment(taskId, commentId) {
+        try {
+            const result = await tasks.updateOne(
+            { _id: new ObjectId(taskId) },
+            { $pull: { comments: { _id: new ObjectId(commentId) } } }
+            )
+            if (result.matchedCount === 0) {
+            throw new Error("Task not found")
+            }
+            return result
+        } catch (e) {
+            console.error(`Unable to delete comment: ${e}`)
             throw e
         }
     }
@@ -265,7 +419,7 @@ export default class taskDAO {
         }
     }
 
-    static async bulkUpdateTasksByProject(projectId, updateData) {
+    static async updateTasksByProject(projectId, updateData) {
         try {
             const result = await tasks.updateMany(
                 { projectId: new ObjectId(projectId) },
@@ -279,7 +433,7 @@ export default class taskDAO {
         }
     }
 
-    static async bulkDeleteTasksByProject(projectId) {
+    static async deleteTasksByProject(projectId) {
         try {
             const result = await tasks.deleteMany(
                 { projectId: new ObjectId(projectId) }
@@ -292,7 +446,7 @@ export default class taskDAO {
         }
     }
 
-    static async bulkDeleteTasksBySection(sectionId) {
+    static async deleteTasksBySection(sectionId) {
         try {
             const result = await tasks.deleteMany(
                 { sectionId: new ObjectId(sectionId) }

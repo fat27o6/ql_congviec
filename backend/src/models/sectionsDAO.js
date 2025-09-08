@@ -72,6 +72,14 @@ export default class sectionDAO {
             throw e
         }
     }
+    static async deleteSectionsByProject(projectId) {
+        if (!projectId) throw new Error('Invalid projectId');
+        const db = getDb();
+        const result = await db.collection('sections').deleteMany({
+            projectId: new ObjectId(projectId)
+        });
+        return result.deletedCount;
+    }
     
     static async getSectionById(sectionId) {
         try {

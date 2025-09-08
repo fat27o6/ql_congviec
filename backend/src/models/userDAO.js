@@ -32,7 +32,7 @@ export default class userDAO{
             const isValid = await bcrypt.compare(password, user.password)
             if (!isValid) throw new Error('Invalid password')
 
-            const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' })
+            const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' })
 
             delete user.password
             const result = { user, token }
@@ -42,5 +42,4 @@ export default class userDAO{
             throw e
         }
     }
-
 }

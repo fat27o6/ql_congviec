@@ -13,7 +13,7 @@ export default function ProjectDetail() {
     try {
       const [{ data: t }, { data: s }] = await Promise.all([
         api.get(`/tasks/projects/${id}/tasks`),
-        api.get(`/sections/project/${id}`)
+        api.get(`/sections/projects/${id}`)
       ])
       setTasks(Array.isArray(t) ? t : [])
       setSections(Array.isArray(s) ? s : [])
@@ -24,24 +24,8 @@ export default function ProjectDetail() {
     }
   }
 
-  useEffect(() => {
-    load()
-  }, [id])
+  useEffect(() => { load() }, [id])
 
-  const grouped = useMemo(() => {
-    const bySection = { none: [] }
-    if (Array.isArray(tasks)) {
-      for (const t of tasks) {
-        let key = t.sectionId || 'none'
-        // Nếu backend trả object thay vì string
-        if (typeof key === 'object' && key._id) key = key._id
-        if (!bySection[key]) bySection[key] = []
-        bySection[key].push(t)
-      }
-    }
-    return bySection
-  }, [tasks])
-  console.log("sections in ProjectDetail", sections)
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -49,7 +33,7 @@ export default function ProjectDetail() {
         <button
           onClick={() =>
             document.dispatchEvent(
-              new CustomEvent('open-task-modal', { detail: { projectId: id } })
+              new CustomEvent('open-task-modal', { detail: { projectId: id, sectionId: null } })
             )
           }
           className="px-3 py-1 rounded bg-indigo-600 text-white"
@@ -81,9 +65,8 @@ export default function ProjectDetail() {
           sections.map(sec => (
             <Section
               key={sec._id}
-              sectionId={sec._id}
+              sectionId={sec._id} // giữ ObjectId
               title={sec.name}
-              tasks={Array.isArray(grouped[sec._id]) ? grouped[sec._id] : []}
               onUpdated={load}
               projectId={id}
             />
@@ -91,10 +74,11 @@ export default function ProjectDetail() {
         ) : (
           <div className="text-sm text-gray-500 italic">No sections</div>
         )}
+
+        {/* Tasks không có section */}
         <Section
           sectionId={null}
           title="No Section"
-          tasks={Array.isArray(grouped['none']) ? grouped['none'] : []}
           onUpdated={load}
           projectId={id}
         />

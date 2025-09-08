@@ -1,145 +1,73 @@
+// backend/src/controllers/labelController.js
 import labelDAO from "../models/labelDAO.js";
 
 export default class LabelController {
-    static async createLabel(req, res) {
-        const { name } = req.body; 
-        const userId = req.user.id;       
-        if (!name) {
-            return res.status(400).json({ error: "Label name is required" });
-        }
+  static async createLabel(req, res) {
+    const { name } = req.body;
+    const userId = req.user && req.user.id;
+    if (!name) return res.status(400).json({ error: "Label name is required" });
 
-        try {
-            const labelId = await labelDAO.addLabel(userId, name);
-            res.status(201).json({ 
-                message: "Label created successfully", 
-                labelId 
-            });
-        } catch (e) {
-            console.error("Create label error:", e);
-            res.status(500).json({ error: e.message });
-        }
+    try {
+      const labelId = await labelDAO.addLabel(userId, name);
+      // return the created label object if possible
+      const label = await labelDAO.getLabelById(labelId);
+      res.status(201).json(label || { _id: labelId, name });
+    } catch (e) {
+      console.error("Create label error:", e);
+      res.status(500).json({ error: e.message });
     }
+  }
 
-    static async getLabels(req, res) {
-        const { projectId } = req.params;
-        
-        try {
-            const labels = await labelDAO.getLabels(projectId);
-            res.status(200).json({
-                count: labels.length,
-                labels
-            });
-        } catch (e) {
-            console.error("Get labels error:", e);
-            res.status(500).json({ error: e.message });
-        }
+  static async listLabels(req, res) {
+    const userId = req.user && req.user.id;
+    try {
+      const labels = await labelDAO.getLabelsByUser(userId);
+      res.status(200).json(labels);
+    } catch (e) {
+      console.error("List labels error:", e);
+      res.status(500).json({ error: e.message });
     }
+  }
 
-    static async updateLabel(req, res) {
-        const { labelId } = req.params;
-        const { name, color } = req.body;
-        
-        if (!name && !color) {
-            return res.status(400).json({ error: "At least one field (name or color) is required for update" });
-        }
-
-        try {
-            const updated = await labelDAO.updateLabel(labelId, name, color);
-            
-            if (!updated) {
-                return res.status(404).json({ error: "Label not found or no changes made" });
-            }
-            
-            res.status(200).json({ message: "Label updated successfully" });
-        } catch (e) {
-            console.error("Update label error:", e);
-            res.status(500).json({ error: e.message });
-        }
+  static async updateLabel(req, res) {
+    const { id } = req.params;
+    const { name } = req.body;
+    const userId = req.user && req.user.id;
+    if (!name) return res.status(400).json({ error: "Name required" });
+    try {
+      const ok = await labelDAO.updateLabel(userId, id, name);
+      if (!ok) return res.status(404).json({ error: "Label not found" });
+      const updated = await labelDAO.getLabelById(id);
+      res.status(200).json(updated);
+    } catch (e) {
+      console.error("Update label error:", e);
+      res.status(500).json({ error: e.message });
     }
+  }
 
-    static async deleteLabel(req, res) {
-        const { labelId } = req.params;
-        
-        try {
-            const deleted = await labelDAO.deleteLabel(labelId);
-            
-            if (!deleted) {
-                return res.status(404).json({ error: "Label not found" });
-            }
-            
-            res.status(200).json({ message: "Label deleted successfully" });
-        } catch (e) {
-            console.error("Delete label error:", e);
-            res.status(500).json({ error: e.message });
-        }
+  static async deleteLabel(req, res) {
+    const { id } = req.params;
+    const userId = req.user && req.user.id;
+    try {
+      const ok = await labelDAO.deleteLabel(userId, id);
+      if (!ok) return res.status(404).json({ error: "Label not found or not allowed" });
+      res.status(200).json({ success: true });
+    } catch (e) {
+      console.error("Delete label error:", e);
+      res.status(500).json({ error: e.message });
     }
+  }
 
-    static async getLabelById(req, res) {
-        const { labelId } = req.params;
-        
-        try {
-            const label = await labelDAO.getLabelById(labelId);
-            
-            if (!label) {
-                return res.status(404).json({ error: "Label not found" });
-            }
-            
-            res.status(200).json(label);
-        } catch (e) {
-            console.error("Get label by ID error:", e);
-            res.status(500).json({ error: e.message });
-        }
+  // Optionally add getLabel by id
+  static async getLabel(req, res) {
+    const { id } = req.params;
+    try {
+      const label = await labelDAO.getLabelById(id);
+      if (!label) return res.status(404).json({ error: "Label not found" });
+      res.json(label);
+    } catch (e) {
+      console.error("Get label error:", e);
+      res.status(500).json({ error: e.message });
     }
-
-    static async getLabelsByUserId(req, res) {
-        const { userId } = req.params;
-        
-        try {
-            const labels = await labelDAO.getLabelsByUserId(userId);
-            res.status(200).json({
-                count: labels.length,
-                labels
-            });
-        } catch (e) {
-            console.error("Get labels by user ID error:", e);
-            res.status(500).json({ error: e.message });
-        }
-    }
-
-    static async searchLabels(req, res) {
-        const { userId } = req.params;
-        const { query, page = 1, limit = 10 } = req.query;
-        
-        if (!query) {
-            return res.status(400).json({ error: "Search query is required" });
-        }
-
-        try {
-            const result = await labelDAO.searchLabels(userId, query, parseInt(page), parseInt(limit));
-            res.status(200).json(result);
-        } catch (e) {
-            console.error("Search labels error:", e);
-            res.status(500).json({ error: e.message });
-        }
-    }
-
-    // New method to get labels by multiple project IDs
-    static async getLabelsByProjectIds(req, res) {
-        const { projectIds } = req.body;
-        
-        if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
-            return res.status(400).json({ error: "Project IDs array is required" });
-        }
-
-        try {
-            const labels = await labelDAO.getLabelsByProjectIds(projectIds);
-            res.status(200).json({
-                count: labels.length,
-                labels
-            });
-        } catch (e) {
-            console.error("Get labels by project IDs error:", e);
-            res.status(500).json({ error: e.message });
-        }
-    }
+  }
 }

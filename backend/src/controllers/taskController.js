@@ -13,6 +13,18 @@ export default class TaskController {
         }
     }
 
+    static async getTasksBySection(req, res) {
+        const { sectionId } = req.params;
+        
+        try {
+            const tasks = await taskDAO.getTasksBySection(sectionId);
+            res.json(Array.isArray(tasks) ? tasks : [])
+        } catch (e) {
+            console.error("Get tasks error:", e);
+            res.status(500).json({ error: e.message });
+        }
+    }
+
     static async createTask(req, res) {
         const { title, description, startAt, dueAt, priority, labels, projectId, sectionId } = req.body;
         const userId = req.user.id;
@@ -59,8 +71,7 @@ export default class TaskController {
                 startAt,
                 dueAt,
                 priority,
-                labels,
-                completed
+                labels
             });
             
             if (!updated) {
@@ -71,6 +82,56 @@ export default class TaskController {
         } catch (e) {
             console.error("Update task error:", e);
             res.status(500).json({ error: e.message });
+        }
+    }
+
+    static async getTaskComments(req, res) {
+        const { taskId } = req.params;
+        
+        try {
+            const task = await taskDAO.getTaskById(taskId);
+            
+            if (!task) return res.status(404).json({ error: 'Task not found' });
+            if(!task.comments){
+                return res.json([]);
+            }
+            else{
+                res.status(200).json(task.comments);
+            }
+        } catch (e) {
+            console.error("Get task by ID error:", e);
+            res.status(500).json({ error: e.message });
+        }
+    }
+
+    static async deleteComment(req, res) {
+        const { taskId, commentId } = req.params
+        try {
+        const success = await taskDAO.deleteComment(taskId, commentId)
+        if (!success) {
+            return res.status(404).json({ error: "Comment not found" })
+        }
+        res.json({ success: true })
+        } catch (e) {
+        console.error("Delete comment error:", e)
+        res.status(500).json({ error: e.message })
+        }
+    }
+
+    static async addTaskComment(req, res) {
+        try {
+            const { text } = req.body;
+            const { taskId } = req.params;
+
+            const task = await taskDAO.getTaskById(taskId);
+            if (!task) return res.status(404).json({ error: 'Task not found' });
+
+            const addcomment = await taskDAO.addComment(taskId, text);
+            res.status(200).json(addcomment);
+
+        } catch (e) {
+            console.error(`Unable to update task status: ${e}`)
+            throw e
         }
     }
 
@@ -109,6 +170,23 @@ export default class TaskController {
         }
     }
 
+    static async getTaskComplete(req, res) {
+        const userId = req.user.id;
+        
+        try {
+            const task = await taskDAO.getTasksComplete(userId);
+            
+            if (!task) {
+                return res.status(404).json({ error: "Task not found" });
+            }
+            
+            res.status(200).json(task);
+        } catch (e) {
+            console.error("Get task complete error:", e);
+            res.status(500).json({ error: e.message });
+        }
+    }
+
     static async getTasksByUserId(req, res) {
         const { userId } = req.params;
         
@@ -122,28 +200,51 @@ export default class TaskController {
     }
 
     static async searchTasks(req, res) {
-        const { query, page = 1, limit = 10 } = req.query;
-        console.log("Search query:", query, "Page:", page, "Limit:", limit);
-        
         try {
-            const result = await taskDAO.searchTasks(query, parseInt(page), parseInt(limit));
-            res.status(200).json(result);
-        } catch (e) {
-            console.error("Search tasks error:", e);
-            res.status(500).json({ error: e.message });
+            const userId = req.user.id;
+            const { query } = req.query;
+            const tasks = await taskDAO.searchTasks(query || "", userId);
+            res.json(tasks);
+        } catch (err) {
+            res.status(500).json({ message: err.message });
+        }
+    }
+
+    static async getTodayTasks(req, res) {
+        try {
+            const userId = req.user.id;
+            const tasks = await taskDAO.getTodayTasks(userId);
+            res.json(tasks);
+        } catch (err) {
+            res.status(500).json({ message: err.message });
+        }
+    }
+
+    static async getUpcomingTasks(req, res) {
+        try {
+            const userId = req.user.id; 
+            const tasks = await taskDAO.getUpcomingTasks(userId);
+            res.json(tasks);
+        } catch (err) {
+            res.status(500).json({ message: err.message });
+        }
+    }
+
+    static async getCompletedTasks(req, res) {
+        try {
+            const userId = req.user.id;
+            const tasks = await taskDAO.getCompletedTasks(userId);
+            res.json(tasks);
+        } catch (err) {
+            res.status(500).json({ message: err.message });
         }
     }
 
     static async updateTaskStatus(req, res) {
         const { taskId } = req.params;
-        const { completed } = req.body;
-        
-        if (completed === undefined) {
-            return res.status(400).json({ error: "Completed status is required" });
-        }
 
         try {
-            const updated = await taskDAO.updateTaskStatus(taskId, completed);
+            const updated = await taskDAO.updateTaskStatus(taskId);
             
             if (!updated) {
                 return res.status(404).json({ error: "Task not found" });

@@ -36,15 +36,26 @@ const validateTask = (req, res, next) => {
 };
 
 // Routes
+
+router.get("/search", TaskController.searchTasks);
+router.get("/filter/today", TaskController.getTodayTasks);
+router.get("/filter/upcoming", TaskController.getUpcomingTasks);
+router.get("/filter/complete", TaskController.getCompletedTasks);
+
 router.get("/projects/:projectId/tasks", TaskController.getTasksByProject); // Fixed this line
-router.post("/", validateTask, TaskController.createTask);
-router.put("/:taskId", validateTask, TaskController.updateTask);
-router.delete("/:taskId", TaskController.deleteTask);
-router.get("/:taskId", TaskController.getTaskById);
+router.get("/sections/:sectionId", TaskController.getTasksBySection);
 router.get("/users/:userId", TaskController.getTasksByUserId);
-router.get("/search/find", TaskController.searchTasks);
 router.patch("/:taskId/status", TaskController.updateTaskStatus);
 router.post("/:taskId/labels", TaskController.addLabelToTask);
 router.delete("/:taskId/labels", TaskController.removeLabelFromTask);
+
+router.get('/:taskId/comments', TaskController.getTaskComments);
+router.post('/:taskId/comments', TaskController.addTaskComment);
+router.delete('/:taskId/comments/:commentId', TaskController.deleteComment);
+
+router.get("/:taskId", TaskController.getTaskById);
+router.put("/:taskId", validateTask, TaskController.updateTask);
+router.delete("/:taskId", TaskController.deleteTask);
+router.post("/", validateTask, TaskController.createTask);
 
 export default router;

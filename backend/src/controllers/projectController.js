@@ -1,4 +1,6 @@
 import projectDAO from "../models/projectDAO.js";
+import sectionDAO from '../models/sectionsDAO.js';
+import taskDAO from '../models/taskDAO.js';
 import middleware from "../middleware.js";
 
 export default class ProjectController {
@@ -102,9 +104,11 @@ export default class ProjectController {
     static async deleteProject(req, res) {
         try {
             const { id } = req.params;
+            const sectionsDeleted = await sectionDAO.deleteSectionsByProject(id);
+            const tasksDeleted = await taskDAO.deleteTasksByProject(id);
             const deleted = await projectDAO.deleteProject(id);
             
-            if (!deleted) {
+            if (!deleted || !sectionsDeleted || !tasksDeleted) {
                 return res.status(404).json({ error: "Project not found" });
             }
             

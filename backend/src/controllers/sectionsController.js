@@ -1,4 +1,5 @@
 import sectionDAO from "../models/sectionsDAO.js";
+import taskDAO from '../models/taskDAO.js';
 
 export default class sectionsController {
     static async createSection(req, res) {
@@ -104,9 +105,10 @@ export default class sectionsController {
                 return res.status(404).json({ error: "Section not found" });
             }
 
+            const tasksDeleted = await taskDAO.deleteTasksBySection(id);
             const deleted = await sectionDAO.deleteSection(id);
             
-            if (!deleted) {
+            if (!deleted || !tasksDeleted) {
                 return res.status(404).json({ error: "Section not found" });
             }
             
